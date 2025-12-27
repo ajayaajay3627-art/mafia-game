@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Protocol: MAFIA</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icon.png">
+    <meta name="theme-color" content="#000000">
 
     <!-- Tailwind CSS -->
     <!-- Tailwind CSS -->
@@ -330,9 +333,55 @@
 
         <button id="btn-game-terminate"
             class="hidden absolute top-0 right-0 -mt-8 text-[0.6rem] border border-[#ff003c] text-[#ff003c] px-2 py-1 opacity-50 hover:opacity-100">ABORT</button>
+
+        <!-- PWA Install Prompt -->
+        <div id="pwa-install-prompt"
+            class="hidden fixed bottom-0 left-0 right-0 bg-black border-t border-[#00ff41] p-4 z-50 flex justify-between items-center shadow-[0_0_20px_rgba(0,255,65,0.3)]">
+            <div>
+                <div class="text-[#00ff41] font-bold text-lg leading-none">INSTALL PROTOCOL</div>
+                <div class="text-xs text-[#00ff41] opacity-70">Add to home screen for better performance</div>
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-pwa-dismiss"
+                    class="px-3 py-1 border border-[#00ff41] text-[#00ff41] text-sm hover:bg-[#00ff41]/20">LATER</button>
+                <button id="btn-pwa-install"
+                    class="px-3 py-1 bg-[#00ff41] text-black font-bold text-sm hover:bg-[#00ff41]/80">INSTALL</button>
+            </div>
+        </div>
     </div>
 
     <script>
+        // --- PWA Logic ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch((err) => console.log('SW Failed:', err));
+        }
+
+        let deferredPrompt;
+        const installPromptEl = document.getElementById('pwa-install-prompt');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installPromptEl.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-pwa-install').addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    deferredPrompt = null;
+                }
+                installPromptEl.classList.add('hidden');
+            }
+        });
+
+        document.getElementById('btn-pwa-dismiss').addEventListener('click', () => {
+            installPromptEl.classList.add('hidden');
+        });
+
         // --- Globals ---
         // Firebase configuration
         const firebaseConfig = {
@@ -357,6 +406,7 @@
         let unsubscribeNearby = null;
         let isCardRevealed = false;
         let gameInterval = null;
+        let timerUiInterval = null;
 
         const PHASES = {
             DISCUSSION: 'DISCUSSION',
@@ -569,10 +619,6 @@
                     renderLobby();
                     switchView('lobby');
                 } else if (roomData.status === 'playing') {
-                    // Auto-reveal card if we are just entering the game
-                    if (document.getElementById('view-game').classList.contains('hidden')) {
-                        isCardRevealed = true;
-                    }
                     renderGame();
                     switchView('game');
                 }
@@ -586,6 +632,10 @@
             if (unsubscribeRoom) {
                 unsubscribeRoom();
                 unsubscribeRoom = null;
+            }
+            if (timerUiInterval) {
+                clearInterval(timerUiInterval);
+                timerUiInterval = null;
             }
             localStorage.removeItem('mafia_room');
             currentRoomCode = '';
@@ -767,11 +817,11 @@
             }
 
             // Update Header
-            document.getElementById('game-phase').textContent = roomData.phase;
-            const timeLeft = Math.max(0, Math.ceil((roomData.phaseEndTime - Date.now()) / 1000));
-            const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-            const secs = (timeLeft % 60).toString().padStart(2, '0');
-            document.getElementById('game-timer').textContent = `${mins}:${secs}`;
+            // Update Header via Interval for smoothness
+            if (!timerUiInterval) {
+                timerUiInterval = setInterval(updateTimerDisplay, 500);
+            }
+            updateTimerDisplay(); // Immediate update
 
             // Mafia Task (Visibility)
             // Note: Task is now displayed inside the card.
@@ -841,6 +891,19 @@
             } else {
                 btnTerminate.classList.add('hidden');
             }
+        }
+
+        function updateTimerDisplay() {
+            if (!roomData) return;
+            const timeLeft = Math.max(0, Math.ceil((roomData.phaseEndTime - Date.now()) / 1000));
+            const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const secs = (timeLeft % 60).toString().padStart(2, '0');
+
+            const timerEl = document.getElementById('game-timer');
+            if (timerEl) timerEl.textContent = `${mins}:${secs}`;
+
+            const phaseEl = document.getElementById('game-phase');
+            if (phaseEl) phaseEl.textContent = roomData.phase;
         }
 
         async function castVote(targetUid) {
