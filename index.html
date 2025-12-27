@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Protocol: MAFIA</title>
+
+    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS -->
+    <!-- NOTE: cdn.tailwindcss.com should not be used in production. For production, install via PostCSS or CLI. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+        body {
+            background-color: #050505;
+            color: #00ff41;
+            font-family: 'VT323', monospace;
+            overflow-x: hidden;
+        }
+
+        /* Scanline effect */
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 10;
+            background: linear-gradient(0deg, rgba(0, 0, 0, 0) 0%, rgba(0, 255, 65, 0.04) 50%, rgba(0, 0, 0, 0) 100%);
+            opacity: 0.1;
+            position: absolute;
+            bottom: 100%;
+            animation: scanline 10s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes scanline {
+            0% {
+                bottom: 100%;
+            }
+
+            100% {
+                bottom: -100%;
+            }
+        }
+
+        /* CRT flicker */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 2;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        .neon-border {
+            box-shadow: 0 0 10px #00ff41, inset 0 0 10px #00ff41;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 5px #00ff41;
+        }
+
+        .mafia-text {
+            color: #ff003c;
+            text-shadow: 0 0 10px #ff003c;
+        }
+
+        .civilian-text {
+            color: #00ff41;
+            text-shadow: 0 0 10px #00ff41;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Custom Input Style */
+        .cyber-input {
+            width: 100%;
+            background-color: black;
+            border-bottom: 2px solid #00ff41;
+            padding: 0.75rem;
+            text-align: center;
+            font-size: 1.5rem;
+            line-height: 2rem;
+            color: #00ff41;
+            outline: none;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            caret-color: #00ff41;
+        }
+
+        .cyber-input:focus {
+            border-color: white;
+        }
+
+        .cyber-input::placeholder {
+            color: #1f2937;
+        }
+
+        /* Custom Button Style */
+        .cyber-btn {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            font-size: 1.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 200ms;
+            border: 2px solid;
+            font-weight: bold;
+            position: relative;
+            overflow: hidden;
+            cursor: pointer;
+            background: transparent;
+        }
+
+        .cyber-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            border-color: #00ff41;
+            color: #00ff41;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #00ff41;
+            color: black;
+        }
+
+        .btn-danger {
+            border-color: #ff003c;
+            color: #ff003c;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background-color: #ff003c;
+            color: black;
+        }
+
+        .btn-secondary {
+            border-color: #4b5563;
+            color: #6b7280;
+            font-size: 0.875rem;
+            padding: 0.25rem 0.5rem;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            border-color: #9ca3af;
+            color: #9ca3af;
+        }
+
+        /* Scrollbar hiding */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Stripes for Card Back */
+        .bg-stripes {
+            background: repeating-linear-gradient(45deg,
+                    #000,
+                    #000 10px,
+                    #003300 10px,
+                    #003300 20px);
+        }
+    </style>
+</head>
+
+<body class="h-screen w-screen crt flex flex-col items-center justify-center">
+    <div class="scanline"></div>
+
+    <!-- VIEW: LOADING -->
+    <div id="view-loading" class="text-[#00ff41] animate-pulse text-xl">ESTABLISHING UPLINK...</div>
+
+    <!-- VIEW: MENU -->
+    <div id="view-menu" class="hidden flex-col items-center w-full max-w-md p-6 relative z-20">
+        <div class="text-6xl mb-2 font-bold neon-text tracking-tighter mt-8">MAFIA</div>
+        <div class="text-sm mb-8 tracking-widest opacity-70">SECURE TERMINAL ACCESS</div>
+
+        <div class="w-full space-y-6">
+            <div class="space-y-2">
+                <label class="text-xs uppercase tracking-widest opacity-60 block text-center">Identity</label>
+                <input id="input-name" class="cyber-input" placeholder="ENTER ALIAS" maxlength="12">
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+                <button id="btn-create" class="cyber-btn btn-primary"><span class="relative z-10">Initialize
+                        Host</span></button>
+
+                <div class="relative border border-[#00ff41] p-4">
+                    <label
+                        class="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-black px-2 text-xs text-[#00ff41]">MANUAL
+                        OVERRIDE</label>
+                    <div class="flex gap-2">
+                        <input id="input-room-code"
+                            class="w-2/3 bg-black border border-[#00ff41] p-2 text-center text-xl text-white uppercase outline-none"
+                            placeholder="CODE" maxlength="4">
+                        <button id="btn-join"
+                            class="w-1/3 bg-[#00ff41] text-black font-bold hover:bg-white transition-colors">JOIN</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nearby Rooms -->
+            <div class="mt-8 border-t border-[#00ff41]/30 pt-4 w-full">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs tracking-widest opacity-70">DETECTED SIGNALS (OPEN GAMES)</span>
+                    <span id="nearby-count" class="text-xs animate-pulse text-[#00ff41]">0 FOUND</span>
+                </div>
+                <div id="nearby-list" class="space-y-2 max-h-48 overflow-y-auto no-scrollbar">
+                    <!-- Dynamic Content -->
+                </div>
+            </div>
+
+            <div id="menu-error"
+                class="hidden text-[#ff003c] text-center border border-[#ff003c] p-2 animate-pulse font-bold bg-[#ff003c]/10">
+            </div>
+        </div>
+    </div>
+
+    <!-- VIEW: LOBBY -->
+    <div id="view-lobby" class="hidden flex-col h-full w-full p-4 max-w-md mx-auto relative z-20">
+        <div class="flex justify-between items-center border-b border-[#00ff41] pb-4 mb-4">
+            <div>
+                <div class="text-xs opacity-50">SESSION ID</div>
+                <div id="lobby-code" class="text-4xl font-bold tracking-widest">----</div>
+            </div>
+            <button id="btn-leave" class="cyber-btn btn-secondary !w-auto">ABORT</button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto mb-4">
+            <div id="lobby-count-label" class="text-xs opacity-50 mb-2">CONNECTED AGENTS (0)</div>
+            <div id="player-list" class="space-y-2">
+                <!-- Dynamic Content -->
+            </div>
+        </div>
+
+        <!-- Host Controls -->
+        <div id="host-controls" class="hidden space-y-4 bg-[#001100] p-4 border border-[#00ff41]">
+            <div>
+                <label class="flex justify-between mb-2">
+                    <span>MAFIA COUNT</span>
+                    <span id="mafia-count-display" class="font-bold text-xl">1</span>
+                </label>
+                <input id="range-mafia" type="range" min="1" max="1" value="1"
+                    class="w-full accent-[#00ff41] h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+                <div id="rec-mafia" class="text-xs text-right mt-1 opacity-50">RECOMMENDED: 1</div>
+            </div>
+            <button id="btn-start" class="cyber-btn btn-primary" disabled>WAITING FOR AGENTS...</button>
+        </div>
+
+        <div id="waiting-msg" class="hidden text-center animate-pulse p-4 border border-[#00ff41]/50 bg-[#00ff41]/5">
+            AWAITING HOST COMMAND...
+        </div>
+        <div id="lobby-error" class="mt-2 text-[#ff003c] text-center text-xs"></div>
+    </div>
+
+    <!-- VIEW: GAME -->
+    <div id="view-game"
+        class="hidden flex-col h-full w-full p-6 max-w-md mx-auto items-center relative z-20 overflow-y-auto no-scrollbar">
+
+        <button id="btn-game-exit"
+            class="absolute top-2 left-2 text-[0.6rem] border border-[#00ff41] text-[#00ff41] px-2 py-1 opacity-50 hover:opacity-100 bg-black z-50">LEAVE</button>
+
+        <!-- Header: Timer & Phase -->
+        <div class="w-full flex justify-between items-end border-b border-[#00ff41] pb-2 mb-4">
+            <div>
+                <div class="text-xs opacity-50">PHASE</div>
+                <div id="game-phase" class="text-xl font-bold text-[#00ff41]">LOADING</div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs opacity-50">TIMER</div>
+                <div id="game-timer" class="text-2xl font-bold font-mono text-[#ff003c]">00:00</div>
+            </div>
+        </div>
+
+        <!-- Mafia Task (Hidden in DOM, moved to Card) -->
+        <div id="mafia-task-container" class="hidden"></div>
+
+        <!-- Role Card (Full Size / Emphasis) -->
+        <div id="role-card"
+            class="w-full max-w-xs flex flex-col relative group cursor-pointer select-none mb-6 mx-auto flex-1 min-h-[400px]">
+            <div id="card-inner"
+                class="absolute inset-0 border-2 transition-colors duration-300 flex flex-col items-center justify-center bg-black z-10 border-[#00ff41] bg-stripes">
+                <!-- Initial State (Hidden) -->
+                <div id="card-hidden" class="flex flex-col items-center justify-center h-full w-full">
+                    <div class="text-2xl">?</div>
+                    <div class="text-[0.6rem] tracking-widest mt-2">ROLE</div>
+                </div>
+
+                <!-- Revealed State -->
+                <div id="card-revealed"
+                    class="hidden flex flex-col items-center justify-center h-full w-full p-2 text-center">
+                    <div id="role-title" class="text-xl font-black tracking-tighter">ROLE</div>
+                    <div id="role-desc" class="text-xs px-2 mt-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voting Section -->
+        <div id="voting-section" class="w-full flex-1">
+            <div class="text-center text-xs opacity-50 mb-2 tracking-widest">NO SIGNAL...</div>
+        </div>
+
+        <!-- Game Over Screen (Overlay) -->
+        <div id="game-over-screen"
+            class="hidden absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center">
+            <div id="winner-title" class="text-6xl font-black neon-text mb-4">VICTORY</div>
+            <div id="winner-desc" class="text-xl mb-8">THE CITY SLEEPS</div>
+            <button id="btn-return-lobby" class="cyber-btn btn-primary">RETURN TO LOBBY</button>
+        </div>
+
+        <button id="btn-game-terminate"
+            class="hidden absolute top-0 right-0 -mt-8 text-[0.6rem] border border-[#ff003c] text-[#ff003c] px-2 py-1 opacity-50 hover:opacity-100">ABORT</button>
+    </div>
+
+    <script>
+        // --- Globals ---
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBORyn9Hl_6HS2HZwtg1UoK6ooQCj5HbaU",
+            authDomain: "mafia-game-7db3c.firebaseapp.com",
+            projectId: "mafia-game-7db3c",
+            storageBucket: "mafia-game-7db3c.firebasestorage.app",
+            messagingSenderId: "354714689130",
+            appId: "1:354714689130:web:5907e78f3828ce44ef3413",
+            measurementId: "G-MQ6L411MYN"
+        };
+        // const firebaseConfig = JSON.parse(__firebase_config);
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+
+        let currentUser = null;
+        let currentRoomCode = '';
+        let roomData = null;
+        let unsubscribeRoom = null;
+        let unsubscribeNearby = null;
+        let isCardRevealed = false;
+        let gameInterval = null;
+
+        const PHASES = {
+            DISCUSSION: 'DISCUSSION',
+            VOTING: 'VOTING',
+            PLEA: 'PLEA',
+            REVOTE: 'REVOTE',
+            RESULT: 'RESULT',
+            GAME_OVER: 'GAME_OVER'
+        };
+
+        const MAFIA_TASKS = [
+            "Touch your hair 3 times", "Touch [TARGET]'s shoulder", "Cough loudly once",
+            "Rub your nose twice", "Stretch your arms up", "Yawn audibly",
+            "Tap the table 5 times", "Cross your legs instantly", "Mention the word 'Pizza'",
+            "Compliment [TARGET]", "Scratch your ear", "Blink rapidly for 3 seconds",
+            "Nod aggressively at [TARGET]", "Stand up and sit down", "Check your phone visibly",
+            "Ask 'What time is it?'", "Hum a tune", "Adjust your shirt collar",
+            "Laugh at something [TARGET] says", "Say 'I suspect myself'"
+        ];
+
+        // --- DOM Elements ---
+        const views = {
+            loading: document.getElementById('view-loading'),
+            menu: document.getElementById('view-menu'),
+            lobby: document.getElementById('view-lobby'),
+            game: document.getElementById('view-game')
+        };
+        const inputName = document.getElementById('input-name');
+        const inputRoomCode = document.getElementById('input-room-code');
+        const errorDisplays = {
+            menu: document.getElementById('menu-error'),
+            lobby: document.getElementById('lobby-error')
+        };
+
+        // --- Initialization ---
+        async function init() {
+            // Restore local data
+            const savedName = localStorage.getItem('mafia_name');
+            if (savedName) inputName.value = savedName;
+
+            const savedCode = localStorage.getItem('mafia_room');
+            if (savedCode) currentRoomCode = savedCode;
+
+            // Auth
+            auth.onAuthStateChanged((user) => {
+                currentUser = user;
+                if (user) {
+                    if (currentRoomCode) {
+                        subscribeToRoom(currentRoomCode);
+                    } else {
+                        switchView('menu');
+                        subscribeToNearby();
+                    }
+                } else {
+                    signIn();
+                }
+            });
+        }
+
+        async function signIn() {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await auth.signInWithCustomToken(__initial_auth_token);
+            } else {
+                await auth.signInAnonymously();
+            }
+        }
+
+        // --- View Management ---
+        function switchView(viewName) {
+            Object.values(views).forEach(el => el.classList.add('hidden'));
+            views[viewName].classList.remove('hidden');
+
+            // Flex handling because hidden uses display:none
+            if (viewName === 'menu' || viewName === 'lobby' || viewName === 'game') {
+                views[viewName].classList.add('flex');
+            }
+        }
+
+        function showError(msg, context = 'menu') {
+            const el = errorDisplays[context];
+            if (el) {
+                el.textContent = msg;
+                el.classList.remove('hidden');
+                setTimeout(() => {
+                    el.classList.add('hidden');
+                    el.textContent = '';
+                }, 3000);
+            }
+        }
+
+        // --- Logic: Menu ---
+        inputName.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+            localStorage.setItem('mafia_name', e.target.value);
+        });
+
+        inputRoomCode.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        document.getElementById('btn-create').addEventListener('click', async () => {
+            const name = inputName.value.trim();
+            if (!name) return showError("IDENTIFY YOURSELF FIRST");
+
+            const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+            const newRoom = {
+                hostId: currentUser.uid,
+                hostName: name,
+                status: 'lobby',
+                mafiaCount: 1,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                players: [{ uid: currentUser.uid, name: name, role: null }]
+            };
+
+            try {
+                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(code).set(newRoom);
+                currentRoomCode = code;
+                subscribeToRoom(code);
+            } catch (err) {
+                showError("CREATION FAILED");
+            }
+        });
+
+        document.getElementById('btn-join').addEventListener('click', () => {
+            const code = inputRoomCode.value.trim().toUpperCase();
+            joinGame(code);
+        });
+
+        async function joinGame(code) {
+            const name = inputName.value.trim();
+            if (!name) return showError("IDENTIFY YOURSELF FIRST");
+            if (code.length !== 4) return showError("INVALID ACCESS CODE");
+
+            const roomRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(code);
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const doc = await transaction.get(roomRef);
+                    if (!doc.exists) throw "Room not found";
+                    const data = doc.data();
+                    if (data.status !== 'lobby') throw "Game in progress";
+
+                    const existingPlayer = data.players.find(p => p.uid === currentUser.uid);
+                    if (!existingPlayer) {
+                        const newPlayers = [...data.players, { uid: currentUser.uid, name: name, role: null }];
+                        transaction.update(roomRef, { players: newPlayers });
+                    }
+                });
+                currentRoomCode = code;
+                subscribeToRoom(code);
+            } catch (e) {
+                showError(typeof e === 'string' ? e : "Connection Failed");
+            }
+        }
+
+        function subscribeToNearby() {
+            if (unsubscribeNearby) unsubscribeNearby();
+            const roomsRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms');
+
+            unsubscribeNearby = roomsRef.onSnapshot((snapshot) => {
+                const listEl = document.getElementById('nearby-list');
+                const countEl = document.getElementById('nearby-count');
+                listEl.innerHTML = '';
+
+                let count = 0;
+                snapshot.forEach(doc => {
+                    const d = doc.data();
+                    if (d.status === 'lobby') {
+                        count++;
+                        const item = document.createElement('div');
+                        item.className = "w-full flex items-center justify-between p-3 border border-[#00ff41]/40 hover:bg-[#00ff41]/10 hover:border-[#00ff41] transition-all cursor-pointer group";
+                        item.innerHTML = `
+                            <div>
+                                <div class="text-lg font-bold group-hover:neon-text">${d.hostName}'S LOBBY</div>
+                                <div class="text-xs opacity-50">ID: ${doc.id}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xl">${d.players.length} <span class="text-xs opacity-50">AGENTS</span></div>
+                            </div>
+                        `;
+                        item.onclick = () => joinGame(doc.id);
+                        listEl.appendChild(item);
+                    }
+                });
+
+                if (count === 0) {
+                    listEl.innerHTML = `<div class="text-center py-4 opacity-30 italic text-sm border border-[#00ff41]/20">NO ACTIVE SIGNALS</div>`;
+                }
+                countEl.textContent = `${count} FOUND`;
+            });
+        }
+
+        // --- Logic: Room (Lobby & Game) ---
+        function subscribeToRoom(code) {
+            if (unsubscribeRoom) unsubscribeRoom();
+
+            const roomRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(code);
+
+            unsubscribeRoom = roomRef.onSnapshot((doc) => {
+                if (!doc.exists) {
+                    handleRoomExit("SIGNAL LOST: ROOM CLOSED");
+                    return;
+                }
+
+                roomData = doc.data();
+                localStorage.setItem('mafia_room', code);
+
+                if (roomData.status === 'lobby') {
+                    isCardRevealed = false; // Reset for new game
+                    renderLobby();
+                    switchView('lobby');
+                } else if (roomData.status === 'playing') {
+                    // Auto-reveal card if we are just entering the game
+                    if (document.getElementById('view-game').classList.contains('hidden')) {
+                        isCardRevealed = true;
+                    }
+                    renderGame();
+                    switchView('game');
+                }
+            }, (err) => {
+                console.error(err);
+                // Don't auto-kick on network blip
+            });
+        }
+
+        function handleRoomExit(msg) {
+            if (unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+            localStorage.removeItem('mafia_room');
+            currentRoomCode = '';
+            roomData = null;
+            if (msg) showError(msg, 'menu');
+            switchView('menu');
+            subscribeToNearby();
+        }
+
+        document.getElementById('btn-leave').addEventListener('click', () => handleRoomExit());
+        document.getElementById('btn-game-exit').addEventListener('click', () => handleRoomExit());
+
+        // --- Logic: Lobby Rendering ---
+        const rangeMafia = document.getElementById('range-mafia');
+        const btnStart = document.getElementById('btn-start');
+
+        rangeMafia.addEventListener('input', (e) => {
+            document.getElementById('mafia-count-display').textContent = e.target.value;
+        });
+
+        btnStart.addEventListener('click', async () => {
+            if (!roomData) return;
+            const players = [...roomData.players];
+            const mCount = parseInt(rangeMafia.value);
+
+            const newPlayers = players.map(p => ({ ...p, role: 'CIVILIAN', status: 'ALIVE', votes: 0 }));
+            let assigned = 0;
+            while (assigned < mCount) {
+                const idx = Math.floor(Math.random() * players.length);
+                if (newPlayers[idx].role !== 'MAFIA') {
+                    newPlayers[idx].role = 'MAFIA';
+                    assigned++;
+                }
+            }
+
+            let task = MAFIA_TASKS[Math.floor(Math.random() * MAFIA_TASKS.length)];
+
+            // Inject Random Target Name
+            if (task.includes('[TARGET]')) {
+                const potentialTargets = newPlayers.filter(p => p.role !== 'MAFIA');
+                const target = potentialTargets.length > 0
+                    ? potentialTargets[Math.floor(Math.random() * potentialTargets.length)].name
+                    : "ANYONE";
+                task = task.replace('[TARGET]', target);
+            }
+
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).set({
+                status: 'playing',
+                players: newPlayers,
+                mafiaCount: mCount,
+                round: 1,
+                phase: PHASES.DISCUSSION,
+                phaseEndTime: Date.now() + (2 * 60 * 1000), // 2 minutes
+                mafiaTask: task,
+                tiedPlayers: [],
+                hostId: currentUser.uid,
+                hostName: roomData.hostName,
+                createdAt: roomData.createdAt
+            }, { merge: true }); // Use set with merge to be robust
+        });
+
+        function renderLobby() {
+            document.getElementById('lobby-code').textContent = currentRoomCode;
+            document.getElementById('lobby-count-label').textContent = `CONNECTED AGENTS (${roomData.players.length})`;
+
+            const list = document.getElementById('player-list');
+            list.innerHTML = '';
+
+            roomData.players.forEach(p => {
+                const row = document.createElement('div');
+                row.className = "flex items-center gap-2 p-2 border border-[#00ff41]/30 bg-black/50";
+                const isHost = p.uid === roomData.hostId;
+                row.innerHTML = `
+                    <div class="w-2 h-2 ${isHost ? 'bg-yellow-400' : 'bg-[#00ff41]'}"></div>
+                    <span class="${p.uid === currentUser.uid ? 'font-bold text-white' : ''}">${p.name} ${p.uid === currentUser.uid ? '(YOU)' : ''}</span>
+                    ${isHost ? '<span class="ml-auto text-xs bg-yellow-400 text-black px-1 font-bold">HOST</span>' : ''}
+                `;
+                list.appendChild(row);
+            });
+
+            const isMyHost = roomData.hostId === currentUser.uid;
+            const hostControls = document.getElementById('host-controls');
+            const waitingMsg = document.getElementById('waiting-msg');
+
+            if (isMyHost) {
+                hostControls.classList.remove('hidden');
+                waitingMsg.classList.add('hidden');
+
+                const maxMafia = Math.max(1, Math.floor((roomData.players.length - 1) / 2));
+                rangeMafia.max = maxMafia;
+
+                // Recalculate range validation
+                if (parseInt(rangeMafia.value) > maxMafia) rangeMafia.value = maxMafia;
+                document.getElementById('mafia-count-display').textContent = rangeMafia.value;
+                document.getElementById('rec-mafia').textContent = `RECOMMENDED: ${Math.floor(roomData.players.length / 3) || 1}`;
+
+                if (roomData.players.length < 3) {
+                    btnStart.textContent = "WAITING FOR AGENTS (3+)...";
+                    btnStart.disabled = true;
+                } else {
+                    btnStart.textContent = "INITIATE PROTOCOL";
+                    btnStart.disabled = false;
+                }
+            } else {
+                hostControls.classList.add('hidden');
+                waitingMsg.classList.remove('hidden');
+            }
+        }
+
+        // --- Logic: Game Rendering ---
+        const cardInner = document.getElementById('card-inner');
+        const cardHidden = document.getElementById('card-hidden');
+        const cardRevealed = document.getElementById('card-revealed');
+        const roleCard = document.getElementById('role-card');
+        const btnTerminate = document.getElementById('btn-game-terminate');
+
+        roleCard.addEventListener('click', () => {
+            isCardRevealed = !isCardRevealed;
+            updateCardVisuals();
+        });
+
+        btnTerminate.addEventListener('click', async () => {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update({
+                status: 'lobby',
+                players: roomData.players.map(p => ({ ...p, role: null }))
+            });
+        });
+
+        function updateCardVisuals() {
+            const myPlayer = roomData.players.find(p => p.uid === currentUser.uid);
+            const isMafia = myPlayer?.role === 'MAFIA';
+
+            if (!isCardRevealed) {
+                // Hidden State
+                cardInner.className = "absolute inset-0 border-4 transition-colors duration-300 flex flex-col items-center justify-center bg-black z-10 border-[#00ff41] bg-stripes";
+                cardHidden.classList.remove('hidden');
+                cardRevealed.classList.add('hidden');
+            } else {
+                // Revealed State
+                cardInner.className = `absolute inset-0 border-4 transition-colors duration-300 flex flex-col items-center justify-center bg-black z-10 ${isMafia ? 'border-[#ff003c]' : 'border-[#00ff41]'}`;
+                cardHidden.classList.add('hidden');
+                cardRevealed.classList.remove('hidden');
+
+                const title = document.getElementById('role-title');
+                const desc = document.getElementById('role-desc');
+
+                if (isMafia) {
+                    title.textContent = "MAFIA";
+                    title.className = "text-6xl font-black mafia-text tracking-tighter";
+
+                    const task = roomData.mafiaTask || 'NONE';
+                    desc.innerHTML = `
+                        <div class="mb-4">ELIMINATE THE CIVILIANS.</div>
+                        <div class="border border-[#ff003c] bg-[#ff003c]/20 p-2 text-sm font-bold text-white shadow-md">
+                            SECRET ORDER:<br/>
+                            ${task}
+                        </div>
+                    `;
+                    desc.className = "text-[#ff003c] text-sm px-4 w-full";
+                } else {
+                    title.textContent = "CIVILIAN";
+                    title.className = "text-5xl font-black civilian-text tracking-tighter";
+                    desc.innerHTML = "IDENTIFY THE TRAITOR.<br/>SURVIVE.";
+                    desc.className = "text-[#00ff41] text-sm px-4";
+                }
+            }
+        }
+
+        function renderGame() {
+            if (!roomData) return;
+
+            // Host Looping Logic
+            const isMyHost = roomData.hostId === currentUser.uid;
+            if (isMyHost && !gameInterval) {
+                startGameLoop();
+            } else if (!isMyHost && gameInterval) {
+                clearInterval(gameInterval);
+                gameInterval = null;
+            }
+
+            // Update Header
+            document.getElementById('game-phase').textContent = roomData.phase;
+            const timeLeft = Math.max(0, Math.ceil((roomData.phaseEndTime - Date.now()) / 1000));
+            const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const secs = (timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('game-timer').textContent = `${mins}:${secs}`;
+
+            // Mafia Task (Visibility)
+            // Note: Task is now displayed inside the card.
+            const myPlayer = roomData.players.find(p => p.uid === currentUser.uid);
+            const isMafia = myPlayer?.role === 'MAFIA';
+
+            // Game Over Check
+            if (roomData.phase === PHASES.GAME_OVER) {
+                document.getElementById('game-over-screen').classList.remove('hidden');
+                document.getElementById('winner-desc').textContent = roomData.winner === 'MAFIA'
+                    ? "THE MAFIA HAS TAKEN CONTROL"
+                    : "THE CITY IS SAFE... FOR NOW";
+                return; // Stop rendering other game elements
+            } else {
+                document.getElementById('game-over-screen').classList.add('hidden');
+            }
+
+            // Voting / Status Section
+            const votingSection = document.getElementById('voting-section');
+            votingSection.innerHTML = '';
+
+            if (roomData.phase === PHASES.DISCUSSION) {
+                votingSection.innerHTML = `<div class="text-center opacity-50 mt-8">DISCUSS SUSPICIOUS BEHAVIOR...</div>`;
+            } else if (roomData.phase === PHASES.VOTING || roomData.phase === PHASES.REVOTE) {
+                // Render Voting List
+                const title = document.createElement('div');
+                title.className = "text-center text-[#ff003c] font-bold mb-4 animate-pulse";
+                title.textContent = roomData.phase === PHASES.REVOTE ? "TIE! REVOTE REQUIRED" : "CAST YOUR VOTE";
+                votingSection.appendChild(title);
+
+                const validTargets = roomData.phase === PHASES.REVOTE
+                    ? roomData.players.filter(p => roomData.tiedPlayers.includes(p.uid))
+                    : roomData.players.filter(p => p.status === 'ALIVE');
+
+                validTargets.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full p-3 border border-[#00ff41] mb-2 hover:bg-[#00ff41] hover:text-black transition-colors flex justify-between items-center";
+
+                    // Highlight if I voted for them
+                    // Note: We need to store votes in a subcollection or on the player object. 
+                    // Simpler: Player object has 'votes' count, but tracking 'who voted who' requires more data.
+                    // For MVP simplicity: We just increment specific player vote count data-side.
+                    // Client-side local check: have I voted?
+
+                    btn.innerHTML = `<span>${p.name}</span> <span class="text-xs opacity-50">VOTE</span>`;
+
+                    if (myPlayer.status !== 'ALIVE') {
+                        btn.disabled = true;
+                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                    } else {
+                        btn.onclick = () => castVote(p.uid);
+                    }
+                    votingSection.appendChild(btn);
+                });
+            } else if (roomData.phase === PHASES.PLEA) {
+                votingSection.innerHTML = `<div class="text-center text-xl text-[#00ff41] mt-8 p-4 border border-[#00ff41]">
+                    <div class="mb-2">DEFENSE PHASE</div>
+                    <div class="text-sm opacity-70">ACCUSED ARE PLEADING INNOCENCE</div>
+                 </div>`;
+            }
+
+            // Card Update
+            updateCardVisuals();
+
+            if (isMyHost) {
+                btnTerminate.classList.remove('hidden');
+            } else {
+                btnTerminate.classList.add('hidden');
+            }
+        }
+
+        async function castVote(targetUid) {
+            // In a real app, use a subcollection for votes to prevent tampering.
+            // For this single-doc structure: host counts votes, or we update an array.
+            // Let's use a "votes" array in roomData: [{voter: uid, target: uid}]
+
+            const myVote = (roomData.votes || []).find(v => v.voter === currentUser.uid);
+            if (myVote) return showError("ALREADY VOTED");
+
+            const newVotes = [...(roomData.votes || []), { voter: currentUser.uid, target: targetUid }];
+
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update({
+                votes: newVotes
+            });
+        }
+
+        function startGameLoop() {
+            gameInterval = setInterval(async () => {
+                if (!roomData || roomData.status !== 'playing' || roomData.hostId !== currentUser.uid) return;
+
+                const now = Date.now();
+                if (now >= roomData.phaseEndTime) {
+                    await advancePhase();
+                }
+            }, 1000);
+        }
+
+        async function advancePhase() {
+            const currentPhase = roomData.phase;
+            let updates = {};
+
+            if (currentPhase === PHASES.DISCUSSION) {
+                // Discussion -> Voting
+                updates = {
+                    phase: PHASES.VOTING,
+                    phaseEndTime: Date.now() + (60 * 1000), // 1 min voting
+                    votes: [] // Reset votes
+                };
+            } else if (currentPhase === PHASES.VOTING || currentPhase === PHASES.REVOTE) {
+                // Count Votes
+                const votes = roomData.votes || [];
+                const counts = {};
+                votes.forEach(v => counts[v.target] = (counts[v.target] || 0) + 1);
+
+                // Find max
+                let maxVotes = 0;
+                let candidates = [];
+                Object.entries(counts).forEach(([uid, count]) => {
+                    if (count > maxVotes) {
+                        maxVotes = count;
+                        candidates = [uid];
+                    } else if (count === maxVotes) {
+                        candidates.push(uid);
+                    }
+                });
+
+                if (candidates.length === 0) {
+                    // No votes? Back to discussion or next round? Let's just go next round.
+                    updates = startNextRound();
+                } else if (candidates.length > 1) {
+                    // Tie
+                    if (currentPhase === PHASES.REVOTE) {
+                        // Tie after revote? No one eliminated.
+                        updates = startNextRound();
+                    } else {
+                        // Go to Plea
+                        updates = {
+                            phase: PHASES.PLEA,
+                            phaseEndTime: Date.now() + (candidates.length * 10 * 1000), // 10s per person
+                            tiedPlayers: candidates,
+                            votes: []
+                        };
+                    }
+                } else {
+                    // Elimination
+                    const victimUid = candidates[0];
+                    const players = [...roomData.players];
+                    const pIdx = players.findIndex(p => p.uid === victimUid);
+                    if (pIdx !== -1) {
+                        players[pIdx].status = 'ELIMINATED';
+                        players[pIdx].role = 'SPECTATOR'; // Reveal role? Or keep hidden?
+                    }
+
+                    // Check Win
+                    const aliveMafia = players.filter(p => p.role === 'MAFIA' && p.status === 'ALIVE').length;
+                    const aliveCiv = players.filter(p => p.role === 'CIVILIAN' && p.status === 'ALIVE').length;
+
+                    if (aliveMafia === 0) {
+                        updates = { phase: PHASES.GAME_OVER, winner: 'CIVILIAN', players };
+                    } else if (aliveCiv === 0) {
+                        updates = { phase: PHASES.GAME_OVER, winner: 'MAFIA', players };
+                    } else {
+                        updates = { ...startNextRound(players), phase: PHASES.DISCUSSION }; // Logic reuse
+                    }
+                }
+            } else if (currentPhase === PHASES.PLEA) {
+                // Plea -> Revote
+                updates = {
+                    phase: PHASES.REVOTE,
+                    phaseEndTime: Date.now() + (60 * 1000),
+                    votes: []
+                };
+            }
+
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update(updates);
+        }
+
+        function startNextRound(currentPlayers = null) {
+            const task = MAFIA_TASKS[Math.floor(Math.random() * MAFIA_TASKS.length)];
+            return {
+                phase: PHASES.DISCUSSION,
+                phaseEndTime: Date.now() + (2 * 60 * 1000),
+                mafiaTask: task,
+                votes: [],
+                tiedPlayers: [],
+                players: currentPlayers || roomData.players
+            };
+        }
+
+        document.getElementById('btn-return-lobby').addEventListener('click', async () => {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update({
+                status: 'lobby',
+                players: roomData.players.map(p => ({ ...p, role: null, status: 'ALIVE' }))
+            });
+        });
+
+        // Start
+        init();
+
+    </script>
+</body>
+
+</html>
