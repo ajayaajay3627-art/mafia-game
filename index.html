@@ -176,26 +176,87 @@
             scrollbar-width: none;
         }
 
-        /* Stripes for Card Back */
-        .bg-stripes {
-            background: repeating-linear-gradient(45deg,
-                    #000,
-                    #000 10px,
-                    #003300 10px,
-                    #003300 20px);
+        /* Icon Background for Card Back */
+        .bg-icon {
+            background-color: #000;
+            background-image: url('./icon.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        /* 3D CardFlip */
+        .perspective-1000 {
+            perspective: 1000px;
+        }
+
+        .transform-style-3d {
+            transform-style: preserve-3d;
+        }
+
+        .backface-hidden {
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .rotate-y-180 {
+            transform: rotateY(180deg);
+        }
+
+        /* Elimination Screen */
+        #elimination-screen {
+            background: rgba(20, 0, 0, 0.9);
+            border: 4px solid #ff003c;
+            box-shadow: inset 0 0 50px #ff003c;
+        }
+
+        .glitch-text {
+            position: relative;
+            animation: glitch 1s linear infinite;
+        }
+
+        @keyframes glitch {
+
+            2%,
+            64% {
+                transform: translate(2px, 0) skew(0deg);
+            }
+
+            4%,
+            60% {
+                transform: translate(-2px, 0) skew(0deg);
+            }
+
+            62% {
+                transform: translate(0, 0) skew(5deg);
+            }
+        }
+
+        .particle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-repeat: no-repeat;
+            background-size: cover;
+            pointer-events: none;
+            z-index: 100;
         }
     </style>
 </head>
+
 
 <body class="h-screen w-screen crt flex flex-col items-center justify-center">
     <div class="scanline"></div>
 
     <!-- VIEW: LOADING -->
+    <button id="btn-audio-toggle"
+        class="absolute top-4 right-4 z-50 text-[#00ff41] border border-[#00ff41] px-2 py-1 text-xs opacity-50 hover:opacity-100">AUDIO:
+        ON</button>
     <div id="view-loading" class="text-[#00ff41] animate-pulse text-xl">ESTABLISHING UPLINK...</div>
 
     <!-- VIEW: MENU -->
     <div id="view-menu" class="hidden flex-col items-center w-full max-w-md p-6 relative z-20">
-        <div class="text-6xl mb-2 font-bold neon-text tracking-tighter mt-8">MAFIA</div>
+        <div class="text-5xl md:text-6xl mb-2 font-bold neon-text tracking-tighter mt-8">MAFIA</div>
         <div class="text-sm mb-8 tracking-widest opacity-70">SECURE TERMINAL ACCESS</div>
 
         <div class="w-full space-y-6">
@@ -315,37 +376,61 @@
 
         <!-- Role Card (Full Size / Emphasis) -->
         <div id="role-card"
-            class="w-full max-w-xs flex flex-col relative group cursor-pointer select-none mb-6 mx-auto flex-1 min-h-[400px]">
-            <div id="card-inner"
-                class="absolute inset-0 border-2 transition-colors duration-300 flex flex-col items-center justify-center bg-black z-10 border-[#00ff41] bg-stripes">
-                <!-- Initial State (Hidden) -->
-                <div id="card-hidden" class="flex flex-col items-center justify-center h-full w-full">
-                    <div class="text-2xl">?</div>
-                    <div class="text-[0.6rem] tracking-widest mt-2">ROLE</div>
+            class="w-full max-w-xs mb-6 mx-auto flex-1 min-h-[400px] perspective-1000 cursor-pointer group select-none">
+            <div id="card-inner" class="relative w-full h-full transform-style-3d transition-transform duration-700">
+
+                <!-- Front (Revealed Content) - Actually Back in 3D terms until flipped -->
+                <div
+                    class="absolute w-full h-full backface-hidden rotate-y-180 border-2 border-[#00ff41] bg-black flex flex-col items-center justify-center p-4 text-center">
+                    <div id="role-title" class="text-4xl md:text-6xl font-black tracking-tighter mb-4">ROLE</div>
+                    <div id="role-desc" class="text-sm"></div>
                 </div>
 
-                <!-- Revealed State -->
-                <div id="card-revealed"
-                    class="hidden flex flex-col items-center justify-center h-full w-full p-2 text-center">
-                    <div id="role-title" class="text-xl font-black tracking-tighter">ROLE</div>
-                    <div id="role-desc" class="text-xs px-2 mt-2"></div>
+                <!-- Back (Hidden/Cover) - Front in 3D terms -->
+                <div
+                    class="absolute w-full h-full backface-hidden border-2 border-[#00ff41] bg-icon flex flex-col items-center justify-center">
+                    <!-- Icon is background, text overlaid if needed, or removed for cleaner look -->
+                    <!-- <div class="text-8xl font-black text-[#00ff41] opacity-20">M</div> -->
+                    <!-- <div class="text-xs tracking-[0.5em] mt-4 text-[#00ff41]">CONFIDENTIAL</div> -->
                 </div>
+
             </div>
         </div>
-
         <!-- Voting Section -->
         <div id="voting-section" class="w-full flex-1 mb-4">
             <div class="text-center text-xs opacity-50 mb-2 tracking-widest">NO SIGNAL...</div>
         </div>
 
-        <button id="btn-confirm-vote" class="hidden cyber-btn btn-danger mb-4">CONFIRM DECISION</button>
+        <!-- REMOVED Global Confirm Button in favor of Among Us style inline buttons -->
 
         <!-- Game Over Screen (Overlay) -->
         <div id="game-over-screen"
             class="hidden absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 text-center">
-            <div id="winner-title" class="text-6xl font-black neon-text mb-4">VICTORY</div>
+            <div id="winner-title" class="text-4xl md:text-6xl font-black neon-text mb-4">VICTORY</div>
             <div id="winner-desc" class="text-xl mb-8">THE CITY SLEEPS</div>
             <button id="btn-return-lobby" class="cyber-btn btn-primary">RETURN TO LOBBY</button>
+        </div>
+
+        <!-- Elimination Screen (Overlay) -->
+        <div id="elimination-screen"
+            class="hidden absolute inset-0 z-[60] flex flex-col items-center justify-center p-4 text-center pointer-events-none">
+
+            <div id="elim-content" class="flex flex-col items-center transition-opacity duration-300">
+                <div class="text-[#ff003c] text-3xl md:text-4xl font-black tracking-widest mb-2 glitch-text">TERMINATED
+                </div>
+                <div id="eliminated-player-name"
+                    class="text-white text-3xl md:text-6xl font-bold mb-8 uppercase drop-shadow-[0_0_10px_rgba(255,0,0,0.8)]">
+                    PLAYER
+                </div>
+
+                <!-- Victim Card -->
+                <div id="victim-card"
+                    class="w-48 h-64 border-2 border-[#ff003c] bg-black flex flex-col items-center justify-center relative shadow-[0_0_30px_#ff003c] mb-8">
+                    <div id="victim-role" class="text-3xl md:text-4xl font-bold text-[#ff003c]">MAFIA</div>
+                </div>
+            </div>
+
+            <div class="w-full h-1 bg-[#ff003c] animate-pulse absolute bottom-10"></div>
         </div>
 
         <button id="btn-game-terminate"
@@ -446,6 +531,111 @@
             "Laugh at something [TARGET] says", "Say 'I suspect myself'"
         ];
 
+        // --- Sound Manager ---
+        class SoundManager {
+            constructor() {
+                this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this.enabled = true;
+                this.osc = null; // Ambience oscillator
+            }
+
+            toggle() {
+                this.enabled = !this.enabled;
+                if (!this.enabled) this.stopAmbience();
+                else this.playAmbience();
+                return this.enabled;
+            }
+
+            playTone(freq, type, duration, vol = 0.1) {
+                if (!this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+
+            playClick() { this.playTone(800, 'square', 0.1, 0.05); }
+            playHover() { this.playTone(200, 'sine', 0.05, 0.02); }
+            playAlert() { this.playTone(400, 'sawtooth', 0.3, 0.1); }
+            playWin() {
+                [0, 200, 400].forEach(delay =>
+                    setTimeout(() => this.playTone(600 + delay, 'square', 0.2, 0.1), delay)
+                );
+            }
+
+            playAmbience() {
+                if (!this.enabled || this.osc) return;
+                this.osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                this.osc.type = 'sine';
+                this.osc.frequency.setValueAtTime(50, this.ctx.currentTime); // Low Drone
+                gain.gain.setValueAtTime(0.02, this.ctx.currentTime);
+                this.osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                this.osc.start();
+            }
+
+            stopAmbience() {
+                if (this.osc) {
+                    this.osc.stop();
+                    this.osc = null;
+                }
+            }
+
+            playHeartbeat() {
+                if (!this.enabled) return;
+                const now = this.ctx.currentTime;
+
+                // Beat 1
+                const osc1 = this.ctx.createOscillator();
+                const gain1 = this.ctx.createGain();
+                osc1.frequency.setValueAtTime(60, now);
+                osc1.frequency.exponentialRampToValueAtTime(40, now + 0.1);
+                gain1.gain.setValueAtTime(0.5, now);
+                gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc1.connect(gain1);
+                gain1.connect(this.ctx.destination);
+                osc1.start(now);
+                osc1.stop(now + 0.1);
+
+                // Beat 2 (slightly softer, delayed)
+                const osc2 = this.ctx.createOscillator();
+                const gain2 = this.ctx.createGain();
+                osc2.frequency.setValueAtTime(60, now + 0.2);
+                osc2.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+                gain2.gain.setValueAtTime(0.3, now + 0.2);
+                gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc2.connect(gain2);
+                gain2.connect(this.ctx.destination);
+                osc2.start(now + 0.2);
+                osc2.stop(now + 0.3);
+            }
+
+            playFlatline() {
+                if (!this.enabled) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth'; // Harsh sound
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 2); // Pitch drop
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 3);
+            }
+
+        }
+
+        const sound = new SoundManager();
+
         // --- DOM Elements ---
         const views = {
             loading: document.getElementById('view-loading'),
@@ -459,7 +649,22 @@
             menu: document.getElementById('menu-error'),
             lobby: document.getElementById('lobby-error')
         };
-        const btnConfirmVote = document.getElementById('btn-confirm-vote');
+        // btnConfirmVote removed
+        const btnAudio = document.getElementById('btn-audio-toggle');
+
+        btnAudio.addEventListener('click', () => {
+            const on = sound.toggle();
+            btnAudio.textContent = `AUDIO: ${on ? 'ON' : 'OFF'}`;
+            btnAudio.style.opacity = on ? '1' : '0.5';
+        });
+
+        // Add Hover sounds globally
+        document.addEventListener('mouseover', (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.classList.contains('group')) sound.playHover();
+        });
+        document.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') sound.playClick();
+        });
 
         // --- Initialization ---
         async function getPublicIP() {
@@ -506,6 +711,10 @@
                 await auth.signInWithCustomToken(__initial_auth_token);
             } else {
                 await auth.signInAnonymously();
+
+                // Init Ambience on user interaction if needed (browser policy)
+                if (sound.ctx.state === 'suspended') sound.ctx.resume();
+                sound.playAmbience();
             }
         }
 
@@ -649,10 +858,17 @@
                 }
 
                 roomData = doc.data();
+
+                if (roomData.status === 'closed') {
+                    handleRoomExit("HOST TERMINATED CONNECTION");
+                    return;
+                }
+
                 localStorage.setItem('mafia_room', code);
 
                 if (roomData.status === 'lobby') {
                     isCardRevealed = false; // Reset for new game
+                    hasGameStartedEffectsRun = false; // Reset effects flag
                     renderLobby();
                     switchView('lobby');
                 } else if (roomData.status === 'playing') {
@@ -665,11 +881,55 @@
             });
         }
 
-        function handleRoomExit(msg) {
+        // --- Logic: Game Start Effects ---
+        let hasGameStartedEffectsRun = false;
+        let lastProcessedElimination = 0; // Timestamp of last shown death
+
+        function runGameStartEffects() {
+            if (hasGameStartedEffectsRun) return;
+            hasGameStartedEffectsRun = true;
+
+            // Heartbeat
+            sound.playHeartbeat();
+            const hbInterval = setInterval(() => sound.playHeartbeat(), 1000); // Repeat every second for intensity? Or just once? User said "intense sound like fast heartbeat". Let's loop it fast for 4s.
+
+            // Actually, let's do a fast heartbeat for 4 seconds
+            clearInterval(hbInterval); // clear the one definition above
+            let beats = 0;
+            const fastHb = setInterval(() => {
+                sound.playHeartbeat();
+                beats++;
+                if (beats >= 8) clearInterval(fastHb); // 2 beats per sec for 4 secs
+            }, 500);
+
+            // Auto Reveal Card
+            if (!isCardRevealed) {
+                isCardRevealed = true;
+                cardInner.classList.add('rotate-y-180');
+
+                // Hide after 4 seconds
+                setTimeout(() => {
+                    isCardRevealed = false;
+                    cardInner.classList.remove('rotate-y-180');
+                    sound.playTone(200, 'sine', 0.5); // Closing sound
+                }, 4000);
+            }
+        }
+
+        async function handleRoomExit(msg) {
+            sound.stopAmbience();
             if (unsubscribeRoom) {
                 unsubscribeRoom();
                 unsubscribeRoom = null;
             }
+
+            // If I am host, close the room
+            if (roomData && roomData.hostId === currentUser.uid && roomData.status !== 'closed') {
+                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update({
+                    status: 'closed'
+                });
+            }
+
             if (timerUiInterval) {
                 clearInterval(timerUiInterval);
                 timerUiInterval = null;
@@ -679,6 +939,7 @@
             roomData = null;
             if (msg) showError(msg, 'menu');
             switchView('menu');
+            sound.playAmbience(); // Restart menu ambience if desired
             subscribeToNearby();
         }
 
@@ -788,14 +1049,20 @@
 
         // --- Logic: Game Rendering ---
         const cardInner = document.getElementById('card-inner');
-        const cardHidden = document.getElementById('card-hidden');
-        const cardRevealed = document.getElementById('card-revealed');
         const roleCard = document.getElementById('role-card');
         const btnTerminate = document.getElementById('btn-game-terminate');
 
         roleCard.addEventListener('click', () => {
             isCardRevealed = !isCardRevealed;
-            updateCardVisuals();
+            if (isCardRevealed) {
+                sound.playTone(300, 'triangle', 0.5); // Card Flip Sound
+                cardInner.classList.add('rotate-y-180');
+            } else {
+                cardInner.classList.remove('rotate-y-180');
+            }
+            // slight delay to update text to avoid cheating by DOM inspection before anim? 
+            // Actually DOM is updated always, CSS hides backface.
+            setTimeout(updateCardVisuals, 300); // Wait for half spin
         });
 
         btnTerminate.addEventListener('click', async () => {
@@ -809,39 +1076,37 @@
             const myPlayer = roomData.players.find(p => p.uid === currentUser.uid);
             const isMafia = myPlayer?.role === 'MAFIA';
 
-            if (!isCardRevealed) {
-                // Hidden State
-                cardInner.className = "absolute inset-0 border-4 transition-colors duration-300 flex flex-col items-center justify-center bg-black z-10 border-[#00ff41] bg-stripes";
-                cardHidden.classList.remove('hidden');
-                cardRevealed.classList.add('hidden');
+            const title = document.getElementById('role-title');
+            const desc = document.getElementById('role-desc');
+            const frontFace = cardInner.querySelector('.rotate-y-180'); // The content face
+
+            if (isMafia) {
+                title.textContent = "MAFIA";
+                title.className = "text-6xl font-black mafia-text tracking-tighter mb-4";
+
+                // Red Border on Reveal Face
+                frontFace.classList.remove('border-[#00ff41]');
+                frontFace.classList.add('border-[#ff003c]');
+
+                const task = roomData.mafiaTask || 'NONE';
+                desc.innerHTML = `
+                    <div class="mb-4">ELIMINATE THE CIVILIANS.</div>
+                    <div class="border border-[#ff003c] bg-[#ff003c]/20 p-2 text-sm font-bold text-white shadow-md">
+                        SECRET ORDER:<br/>
+                        ${task}
+                    </div>
+                `;
+                desc.className = "text-[#ff003c] text-sm px-4 w-full";
             } else {
-                // Revealed State
-                cardInner.className = `absolute inset-0 border-4 transition-colors duration-300 flex flex-col items-center justify-center bg-black z-10 ${isMafia ? 'border-[#ff003c]' : 'border-[#00ff41]'}`;
-                cardHidden.classList.add('hidden');
-                cardRevealed.classList.remove('hidden');
+                title.textContent = "CIVILIAN";
+                title.className = "text-5xl font-black civilian-text tracking-tighter mb-4";
 
-                const title = document.getElementById('role-title');
-                const desc = document.getElementById('role-desc');
+                // Green Border on Reveal Face
+                frontFace.classList.remove('border-[#ff003c]');
+                frontFace.classList.add('border-[#00ff41]');
 
-                if (isMafia) {
-                    title.textContent = "MAFIA";
-                    title.className = "text-6xl font-black mafia-text tracking-tighter";
-
-                    const task = roomData.mafiaTask || 'NONE';
-                    desc.innerHTML = `
-                        <div class="mb-4">ELIMINATE THE CIVILIANS.</div>
-                        <div class="border border-[#ff003c] bg-[#ff003c]/20 p-2 text-sm font-bold text-white shadow-md">
-                            SECRET ORDER:<br/>
-                            ${task}
-                        </div>
-                    `;
-                    desc.className = "text-[#ff003c] text-sm px-4 w-full";
-                } else {
-                    title.textContent = "CIVILIAN";
-                    title.className = "text-5xl font-black civilian-text tracking-tighter";
-                    desc.innerHTML = "IDENTIFY THE TRAITOR.<br/>SURVIVE.";
-                    desc.className = "text-[#00ff41] text-sm px-4";
-                }
+                desc.innerHTML = "IDENTIFY THE TRAITOR.<br/>SURVIVE.";
+                desc.className = "text-[#00ff41] text-sm px-4";
             }
         }
 
@@ -855,6 +1120,22 @@
             } else if (!isMyHost && gameInterval) {
                 clearInterval(gameInterval);
                 gameInterval = null;
+            }
+
+            // Trigger Start Effects if just started (Discussion phase, round 1 roughly, or just check local flag)
+            // We use a local flag `hasGameStartedEffectsRun` reset on lobby.
+            if (!hasGameStartedEffectsRun) {
+                runGameStartEffects();
+            }
+
+            // Check for Elimination Event
+            if (roomData.eliminationEvent && roomData.eliminationEvent.timestamp > lastProcessedElimination) {
+                const event = roomData.eliminationEvent;
+                // Only show if recent (within 10s) to avoid showing on late join
+                if (Date.now() - event.timestamp < 10000) {
+                    showEliminationAnimation(event.victim, event.role || 'UNKNOWN');
+                }
+                lastProcessedElimination = event.timestamp;
             }
 
             // Update Header
@@ -902,35 +1183,38 @@
 
                 if (myVote) {
                     votingSection.innerHTML += `<div class="text-center text-[#ff003c] p-4 border border-[#ff003c]">VOTE LOCKED: ${myVote.target === currentUser.uid ? 'SELF' : roomData.players.find(p => p.uid === myVote.target)?.name || 'UNKNOWN'}</div>`;
-                    btnConfirmVote.classList.add('hidden');
                 } else {
                     validTargets.forEach(p => {
-                        const btn = document.createElement('button');
-                        // Highlight selection
                         const isSelected = selectedTarget === p.uid;
-                        btn.className = `w-full p-3 border mb-2 transition-colors flex justify-between items-center ${isSelected ? 'bg-[#00ff41] text-black border-[#00ff41]' : 'border-[#00ff41] hover:bg-[#00ff41]/20 text-[#00ff41]'}`;
+                        const btn = document.createElement('div');
 
-                        btn.innerHTML = `<span>${p.name}</span> <span class="text-xs opacity-50">VOTE</span>`;
-
-                        if (myPlayer.status !== 'ALIVE') {
-                            btn.disabled = true;
-                            btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        // New Inline Voting UI
+                        if (isSelected && myPlayer.status === 'ALIVE') {
+                            btn.className = "w-full p-2 border border-[#00ff41] bg-[#00ff41]/10 mb-2 flex items-center justify-between transition-all duration-300";
+                            btn.innerHTML = `
+                                <span class="text-lg font-bold ml-2">${p.name}</span>
+                                <div class="flex gap-2">
+                                     <button id="btn-cancel-${p.uid}" class="bg-gray-800 text-white p-2 text-xs border border-gray-600 hover:bg-gray-700">CANCEL</button>
+                                     <button id="btn-confirm-${p.uid}" class="bg-[#ff003c] text-white p-2 font-bold text-xs border border-[#ff003c] hover:bg-black hover:text-[#ff003c] animate-pulse">CONFIRM</button>
+                                </div>
+                            `;
+                            setTimeout(() => {
+                                document.getElementById(`btn-cancel-${p.uid}`).onclick = (e) => { e.stopPropagation(); selectedTarget = null; sound.playClick(); renderGame(); };
+                                document.getElementById(`btn-confirm-${p.uid}`).onclick = (e) => { e.stopPropagation(); castVote(p.uid); sound.playAlert(); };
+                            }, 0);
                         } else {
-                            btn.onclick = () => {
-                                selectedTarget = p.uid;
-                                renderGame(); // Re-render to show selection
-                            };
+                            btn.className = `w-full p-3 border mb-2 transition-colors flex justify-between items-center cursor-pointer ${myPlayer.status !== 'ALIVE' ? 'opacity-50 border-gray-600' : 'border-[#00ff41] hover:bg-[#00ff41] hover:text-black'}`;
+                            btn.innerHTML = `<span>${p.name}</span> <span class="text-xs opacity-50">VOTE</span>`;
+                            if (myPlayer.status === 'ALIVE') {
+                                btn.onclick = () => {
+                                    selectedTarget = p.uid;
+                                    sound.playClick();
+                                    renderGame();
+                                };
+                            }
                         }
                         votingSection.appendChild(btn);
                     });
-
-                    // Show Confirm Button if selection made
-                    if (selectedTarget && myPlayer.status === 'ALIVE') {
-                        btnConfirmVote.classList.remove('hidden');
-                        btnConfirmVote.onclick = () => castVote(selectedTarget);
-                    } else {
-                        btnConfirmVote.classList.add('hidden');
-                    }
                 }
             } else if (roomData.phase === PHASES.PLEA) {
                 votingSection.innerHTML = `<div class="text-center text-xl text-[#00ff41] mt-8 p-4 border border-[#00ff41]">
@@ -960,6 +1244,82 @@
 
             const phaseEl = document.getElementById('game-phase');
             if (phaseEl) phaseEl.textContent = roomData.phase;
+        }
+
+        function showEliminationAnimation(name, role) {
+            const el = document.getElementById('elimination-screen');
+            const nameEl = document.getElementById('eliminated-player-name');
+            const cardEl = document.getElementById('victim-card');
+            const roleEl = document.getElementById('victim-role');
+            const contentEl = document.getElementById('elim-content');
+
+            nameEl.textContent = name;
+            roleEl.textContent = role;
+            roleEl.className = role === 'MAFIA' ? "text-3xl md:text-4xl font-black text-[#ff003c]" : "text-3xl md:text-4xl font-black text-[#00ff41]";
+            cardEl.style.opacity = '1';
+            contentEl.style.opacity = '1';
+
+            el.classList.remove('hidden');
+            sound.playFlatline();
+
+            // Ripping / Shatter Effect after 1.5s
+            setTimeout(() => {
+                createShatterEffect(cardEl, role);
+                cardEl.style.opacity = '0'; // Hide original
+
+                sound.playTone(100, 'sawtooth', 0.2); // Crunch sound
+
+                // Fade out text
+                setTimeout(() => {
+                    contentEl.style.opacity = '0';
+                }, 1000);
+
+            }, 2000);
+
+            // Hide after 5 seconds
+            setTimeout(() => {
+                el.classList.add('hidden');
+            }, 5000);
+        }
+
+        function createShatterEffect(element, role) {
+            const rect = element.getBoundingClientRect();
+            const particles = 40;
+            const color = role === 'MAFIA' ? '#ff003c' : '#00ff41'; // Color base
+
+            for (let i = 0; i < particles; i++) {
+                const part = document.createElement('div');
+                part.classList.add('particle');
+
+                // Random Size
+                const size = Math.random() * 20 + 5;
+                part.style.width = `${size}px`;
+                part.style.height = `${size}px`;
+                part.style.backgroundColor = Math.random() > 0.5 ? 'black' : color;
+                if (Math.random() > 0.8) part.style.border = `1px solid ${color}`;
+
+                // Start Position (spread within card)
+                const startX = rect.left + Math.random() * rect.width;
+                const startY = rect.top + Math.random() * rect.height;
+                part.style.left = `${startX}px`;
+                part.style.top = `${startY}px`;
+
+                document.body.appendChild(part);
+
+                // Animation
+                const destX = (Math.random() - 0.5) * 500;
+                const destY = (Math.random() - 0.5) * 500;
+                const rot = (Math.random() - 0.5) * 720;
+
+                part.animate([
+                    { transform: `translate(0,0) rotate(0deg)`, opacity: 1 },
+                    { transform: `translate(${destX}px, ${destY}px) rotate(${rot}deg)`, opacity: 0 }
+                ], {
+                    duration: 1000 + Math.random() * 1000,
+                    easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+                    fill: 'forwards'
+                }).onfinish = () => part.remove();
+            }
         }
 
         async function castVote(targetUid) {
@@ -1051,9 +1411,16 @@
                     const victimUid = candidates[0];
                     const players = [...roomData.players];
                     const pIdx = players.findIndex(p => p.uid === victimUid);
+                    let eliminationEvent = null;
+
                     if (pIdx !== -1) {
                         players[pIdx].status = 'ELIMINATED';
                         players[pIdx].role = 'SPECTATOR'; // Reveal role? Or keep hidden?
+                        eliminationEvent = {
+                            victim: players[pIdx].name,
+                            role: players[pIdx].role, // Added role
+                            timestamp: Date.now()
+                        };
                     }
 
                     // Check Win
@@ -1061,11 +1428,13 @@
                     const aliveCiv = players.filter(p => p.role === 'CIVILIAN' && p.status === 'ALIVE').length;
 
                     if (aliveMafia === 0) {
-                        updates = { phase: PHASES.GAME_OVER, winner: 'CIVILIAN', players };
+                        sound.playWin(); // Victory music/sound
+                        updates = { phase: PHASES.GAME_OVER, winner: 'CIVILIAN', players, eliminationEvent };
                     } else if (aliveCiv === 0) {
-                        updates = { phase: PHASES.GAME_OVER, winner: 'MAFIA', players };
+                        sound.playWin();
+                        updates = { phase: PHASES.GAME_OVER, winner: 'MAFIA', players, eliminationEvent };
                     } else {
-                        updates = { ...startNextRound(players), phase: PHASES.DISCUSSION }; // Logic reuse
+                        updates = { ...startNextRound(players), phase: PHASES.DISCUSSION, eliminationEvent }; // Logic reuse
                     }
                 }
             } else if (currentPhase === PHASES.PLEA) {
@@ -1076,6 +1445,8 @@
                     votes: []
                 };
             }
+
+
 
             await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update(updates);
         }
