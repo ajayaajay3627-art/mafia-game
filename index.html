@@ -267,6 +267,21 @@
                     class="w-full accent-[#00ff41] h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
                 <div id="rec-mafia" class="text-xs text-right mt-1 opacity-50">RECOMMENDED: 1</div>
             </div>
+
+            <!-- Timer Settings -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs uppercase mb-1">Discuss (s)</label>
+                    <input id="input-time-discuss" type="number" value="120" min="10" max="600"
+                        class="w-full bg-black border border-[#00ff41] p-2 text-center text-white outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase mb-1">Vote (s)</label>
+                    <input id="input-time-vote" type="number" value="60" min="10" max="300"
+                        class="w-full bg-black border border-[#00ff41] p-2 text-center text-white outline-none">
+                </div>
+            </div>
+
             <button id="btn-start" class="cyber-btn btn-primary" disabled>WAITING FOR AGENTS...</button>
         </div>
 
@@ -319,9 +334,11 @@
         </div>
 
         <!-- Voting Section -->
-        <div id="voting-section" class="w-full flex-1">
+        <div id="voting-section" class="w-full flex-1 mb-4">
             <div class="text-center text-xs opacity-50 mb-2 tracking-widest">NO SIGNAL...</div>
         </div>
+
+        <button id="btn-confirm-vote" class="hidden cyber-btn btn-danger mb-4">CONFIRM DECISION</button>
 
         <!-- Game Over Screen (Overlay) -->
         <div id="game-over-screen"
@@ -352,7 +369,7 @@
 
     <script>
         // --- PWA Logic ---
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.protocol === 'http:')) {
             navigator.serviceWorker.register('./service-worker.js')
                 .then(() => console.log('Service Worker Registered'))
                 .catch((err) => console.log('SW Failed:', err));
@@ -407,6 +424,8 @@
         let isCardRevealed = false;
         let gameInterval = null;
         let timerUiInterval = null;
+        let myPublicIp = null;
+        let selectedTarget = null;
 
         const PHASES = {
             DISCUSSION: 'DISCUSSION',
@@ -440,8 +459,20 @@
             menu: document.getElementById('menu-error'),
             lobby: document.getElementById('lobby-error')
         };
+        const btnConfirmVote = document.getElementById('btn-confirm-vote');
 
         // --- Initialization ---
+        async function getPublicIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                return data.ip;
+            } catch (e) {
+                console.error("IP Fetch Failed", e);
+                return 'unknown';
+            }
+        }
+
         async function init() {
             // Restore local data
             const savedName = localStorage.getItem('mafia_name');
@@ -458,7 +489,11 @@
                         subscribeToRoom(currentRoomCode);
                     } else {
                         switchView('menu');
-                        subscribeToNearby();
+                        getPublicIP().then(ip => {
+                            myPublicIp = ip;
+                            console.log("My IP:", myPublicIp);
+                            subscribeToNearby();
+                        });
                     }
                 } else {
                     signIn();
@@ -517,6 +552,7 @@
                 hostName: name,
                 status: 'lobby',
                 mafiaCount: 1,
+                publicIp: myPublicIp,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 players: [{ uid: currentUser.uid, name: name, role: null }]
             };
@@ -574,14 +610,15 @@
                 let count = 0;
                 snapshot.forEach(doc => {
                     const d = doc.data();
-                    if (d.status === 'lobby') {
+                    // Filter by Wifi only if IP is known
+                    if (d.status === 'lobby' && (d.publicIp === myPublicIp || !d.publicIp || d.publicIp === 'unknown')) {
                         count++;
                         const item = document.createElement('div');
                         item.className = "w-full flex items-center justify-between p-3 border border-[#00ff41]/40 hover:bg-[#00ff41]/10 hover:border-[#00ff41] transition-all cursor-pointer group";
                         item.innerHTML = `
                             <div>
                                 <div class="text-lg font-bold group-hover:neon-text">${d.hostName}'S LOBBY</div>
-                                <div class="text-xs opacity-50">ID: ${doc.id}</div>
+                                <div class="text-xs opacity-50">ID: ${doc.id}</div> 
                             </div>
                             <div class="text-right">
                                 <div class="text-xl">${d.players.length} <span class="text-xs opacity-50">AGENTS</span></div>
@@ -660,6 +697,8 @@
             if (!roomData) return;
             const players = [...roomData.players];
             const mCount = parseInt(rangeMafia.value);
+            const discussTime = parseInt(document.getElementById('input-time-discuss').value) || 120;
+            const voteTime = parseInt(document.getElementById('input-time-vote').value) || 60;
 
             const newPlayers = players.map(p => ({ ...p, role: 'CIVILIAN', status: 'ALIVE', votes: 0 }));
             let assigned = 0;
@@ -688,7 +727,9 @@
                 mafiaCount: mCount,
                 round: 1,
                 phase: PHASES.DISCUSSION,
-                phaseEndTime: Date.now() + (2 * 60 * 1000), // 2 minutes
+                phaseEndTime: Date.now() + (discussTime * 1000),
+                discussionTime: discussTime,
+                votingTime: voteTime,
                 mafiaTask: task,
                 tiedPlayers: [],
                 hostId: currentUser.uid,
@@ -856,26 +897,41 @@
                     ? roomData.players.filter(p => roomData.tiedPlayers.includes(p.uid))
                     : roomData.players.filter(p => p.status === 'ALIVE');
 
-                validTargets.forEach(p => {
-                    const btn = document.createElement('button');
-                    btn.className = "w-full p-3 border border-[#00ff41] mb-2 hover:bg-[#00ff41] hover:text-black transition-colors flex justify-between items-center";
+                // Check if I already voted
+                const myVote = (roomData.votes || []).find(v => v.voter === currentUser.uid);
 
-                    // Highlight if I voted for them
-                    // Note: We need to store votes in a subcollection or on the player object. 
-                    // Simpler: Player object has 'votes' count, but tracking 'who voted who' requires more data.
-                    // For MVP simplicity: We just increment specific player vote count data-side.
-                    // Client-side local check: have I voted?
+                if (myVote) {
+                    votingSection.innerHTML += `<div class="text-center text-[#ff003c] p-4 border border-[#ff003c]">VOTE LOCKED: ${myVote.target === currentUser.uid ? 'SELF' : roomData.players.find(p => p.uid === myVote.target)?.name || 'UNKNOWN'}</div>`;
+                    btnConfirmVote.classList.add('hidden');
+                } else {
+                    validTargets.forEach(p => {
+                        const btn = document.createElement('button');
+                        // Highlight selection
+                        const isSelected = selectedTarget === p.uid;
+                        btn.className = `w-full p-3 border mb-2 transition-colors flex justify-between items-center ${isSelected ? 'bg-[#00ff41] text-black border-[#00ff41]' : 'border-[#00ff41] hover:bg-[#00ff41]/20 text-[#00ff41]'}`;
 
-                    btn.innerHTML = `<span>${p.name}</span> <span class="text-xs opacity-50">VOTE</span>`;
+                        btn.innerHTML = `<span>${p.name}</span> <span class="text-xs opacity-50">VOTE</span>`;
 
-                    if (myPlayer.status !== 'ALIVE') {
-                        btn.disabled = true;
-                        btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        if (myPlayer.status !== 'ALIVE') {
+                            btn.disabled = true;
+                            btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        } else {
+                            btn.onclick = () => {
+                                selectedTarget = p.uid;
+                                renderGame(); // Re-render to show selection
+                            };
+                        }
+                        votingSection.appendChild(btn);
+                    });
+
+                    // Show Confirm Button if selection made
+                    if (selectedTarget && myPlayer.status === 'ALIVE') {
+                        btnConfirmVote.classList.remove('hidden');
+                        btnConfirmVote.onclick = () => castVote(selectedTarget);
                     } else {
-                        btn.onclick = () => castVote(p.uid);
+                        btnConfirmVote.classList.add('hidden');
                     }
-                    votingSection.appendChild(btn);
-                });
+                }
             } else if (roomData.phase === PHASES.PLEA) {
                 votingSection.innerHTML = `<div class="text-center text-xl text-[#00ff41] mt-8 p-4 border border-[#00ff41]">
                     <div class="mb-2">DEFENSE PHASE</div>
@@ -919,6 +975,7 @@
             await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('mafia_rooms').doc(currentRoomCode).update({
                 votes: newVotes
             });
+            selectedTarget = null; // Reset selection
         }
 
         function startGameLoop() {
@@ -926,6 +983,17 @@
                 if (!roomData || roomData.status !== 'playing' || roomData.hostId !== currentUser.uid) return;
 
                 const now = Date.now();
+
+                // Check if Everyone Voted (Early End)
+                if (roomData.phase === PHASES.VOTING || roomData.phase === PHASES.REVOTE) {
+                    const validVoters = roomData.players.filter(p => p.status === 'ALIVE').length;
+                    const currentVotes = (roomData.votes || []).length;
+                    if (currentVotes >= validVoters && validVoters > 0) {
+                        await advancePhase();
+                        return; // Skip time check
+                    }
+                }
+
                 if (now >= roomData.phaseEndTime) {
                     await advancePhase();
                 }
@@ -940,7 +1008,7 @@
                 // Discussion -> Voting
                 updates = {
                     phase: PHASES.VOTING,
-                    phaseEndTime: Date.now() + (60 * 1000), // 1 min voting
+                    phaseEndTime: Date.now() + ((roomData.votingTime || 60) * 1000),
                     votes: [] // Reset votes
                 };
             } else if (currentPhase === PHASES.VOTING || currentPhase === PHASES.REVOTE) {
@@ -1016,7 +1084,7 @@
             const task = MAFIA_TASKS[Math.floor(Math.random() * MAFIA_TASKS.length)];
             return {
                 phase: PHASES.DISCUSSION,
-                phaseEndTime: Date.now() + (2 * 60 * 1000),
+                phaseEndTime: Date.now() + ((roomData.discussionTime || 120) * 1000),
                 mafiaTask: task,
                 votes: [],
                 tiedPlayers: [],
